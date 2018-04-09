@@ -1,0 +1,118 @@
+---
+title: "MappingFunForResearch"
+author: "Ramy Jaber"
+date: "April 6, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+library(tidyverse)
+library(ggplot2)
+
+stations <- read_csv('/home/khalana/Documents/Research/station.csv')
+results <- read_csv('/home/khalana/Documents/Research/result.csv')
+schools <- read_csv('/home/khalana/Documents/Research/SchoolLeadResults.csv')
+stations <- stations[,c("MonitoringLocationIdentifier","LatitudeMeasure", "LongitudeMeasure")]
+schools$`perc outlets over` <- as.numeric(schools$`perc outlets over`)
+df1 <- merge(x = results, y = stations, by = "MonitoringLocationIdentifier", all.x = TRUE)
+
+# df1$ActivityStartDate <- as.Date(as.character(df1$ActivityStartDate), "%y-%m-%d")
+df1 <- subset(df1, ActivityStartDate > as.Date("2013-01-01"))
+
+# install.packages('ggmap')
+library(ggmap)
+
+theme_set(theme_bw(16))
+map <- get_map(location = c(lon=-76.3,lat=43), zoom=7)
+ggmap(map)+
+  geom_point(aes(x=LongitudeMeasure, y=LatitudeMeasure, size=ResultMeasureValue, alpha=ResultMeasureValue),color="orange",data=df1)+
+  geom_point(aes(x=long, y=lat, size=`perc outlets over`*100, alpha=`perc outlets over`), color="blue",shape=17,data=schools)
+
+ggplot()+
+  geom_point(aes(x=LongitudeMeasure, y=LatitudeMeasure, size=ResultMeasureValue, color="orange"),data=df1)
+  
+
+```
+
+## Distance Plotting
+
+You can also embed plots, for example:
+
+```{r}
+schools <- schools[order(schools$`perc outlets over`, decreasing = TRUE), c(1:18)]
+worstSchools <- subset(schools, `perc outlets over`>.5)
+worstStations <- subset(df1, ResultMeasureValue > 15)
+worstStations$LatitudeMeasure <- as.numeric(worstStations$LatitudeMeasure)
+worstStations$LongitudeMeasure <- as.numeric(worstStations$LongitudeMeasure)
+
+```
+
+
+```{r pressure, echo=FALSE}
+
+# Set current address
+library(geosphere)
+library(ggplot2)
+# install.packages('ggrepel')
+library(ggrepel)
+alexander <- worstSchools[9,]
+munroe <- worstSchools[33,]
+choice <- munroe
+
+currLong <- choice$long
+currLat <- choice$lat
+
+currLoc <- as_data_frame(choice[,c("long","lat")])
+
+df1$distFromCurr <- c(0, sapply(2:nrow(df1), function(rownumber) {distGeo(currLoc,  
+			 c(df1$LongitudeMeasure[rownumber], 
+			 df1$LatitudeMeasure[rownumber]))}))
+
+
+# Get closest bad stations
+worstStations$distFromCurr <- c(0, sapply(2:nrow(worstStations), function(rownumber) {distGeo(currLoc,  
+			 c(stations$LongitudeMeasure[rownumber], 
+			 stations$LatitudeMeasure[rownumber]))}))
+worstStations$distFromCurr <- as.factor(as.numeric(worstStations$distFromCurr))
+
+closeStations <- head(worstStations[order(worstStations$distFromCurr),],n=10)
+closeStations <- closeStations[,c("MonitoringLocationIdentifier","ResultMeasureValue","LatitudeMeasure","LongitudeMeasure","distFromCurr")]
+closeStations$rank <- as.numeric(row.names(closeStations)) - 1
+
+# Create map object
+map <- get_map(location = currLoc, 
+               source = "google", 
+               maptype = "roadmap", 
+               zoom = 10)
+
+# Plot the map and include labels
+ggmap(map) +
+  geom_point(data = closeStations, aes(x = LongitudeMeasure, y = LatitudeMeasure), color = "red") +
+  geom_point(data = currLoc, aes(x = long, y = lat), shape = 17, size = 6, color = "blue",
+	     		fill = "blue") +
+  geom_label_repel(data = closeStations, aes(x = LongitudeMeasure,
+	     					  y = LatitudeMeasure, label = ResultMeasureValue), size=3)
+#     geom_label_repel(data = closeStations, aes(x = LongitudeMeasure,
+# 	     					  y = LatitudeMeasure, label = paste(MonitoringLocationIdentifier, "\n", ResultMeasureValue)), size=3)
+  	     
+
+```
+
+
+```{r}
+attach(mtcars)
+newData <- mtcars
+newData <- mtcars[order(mpg),]
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
